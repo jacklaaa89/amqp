@@ -1,0 +1,129 @@
+name: Release
+on:
+  push:
+    branches: [ master, develop, staging ]
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  modules:
+    name: Getting Go modules
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+      - name: Cache Go modules
+        id: cache-go-modules
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Setup Go environment
+        if: steps.cache-go-modules.outputs.cache-hit != 'true'
+        uses: actions/setup-go@v2.1.4
+        with:
+          go-version: 1.19
+      - name: Download Go modules
+        if: steps.cache-go-modules.outputs.cache-hit != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global url."https://${GITHUB_TOKEN}@github.com".insteadOf "https://github.com"
+          go get
+  test:
+    name: Running tests
+    runs-on: ubuntu-22.04
+    needs: modules
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+      - name: Setup Go environment
+        uses: actions/setup-go@v2.1.4
+        with:
+          go-version: 1.19
+      - name: Retrieve Go modules
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+      - name: Start RabbitMQ
+        uses: namoshek/rabbitmq-github-action@v1
+        with:
+          version: '3.9.9-management'
+          ports: '15672:15672 5672:5672 5671:5671'
+          container-name: 'rabbitmq'
+          plugins: 'rabbitmq_management,rabbitmq_amqp1_0,rabbitmq_mqtt,rabbitmq_shovel,rabbitmq_shovel_management,rabbitmq_stomp,rabbitmq_stream'
+      - name: Test
+        run: |
+          go test --tags integration ./... -json > test-report.json -coverprofile=test-coverage.out
+      - name: Upload test reports
+        uses: actions/upload-artifact@v2
+        with:
+          name: test-reports
+          path: |
+            test-report.json
+            test-coverage.out
+          retention-days: 1
+  lint:
+    name: Lint checks
+    runs-on: ubuntu-22.04
+    needs: modules
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+      - name: Cache golangci-lint binary
+        id: cache-golangci-lint
+        uses: actions/cache@v2
+        with:
+          path: ./bin/golangci-lint
+          key: ${{ runner.os }}-golangci-lint-v1.38.0
+      - name: Setup Go environment
+        uses: actions/setup-go@v2.1.4
+        with:
+          go-version: 1.19
+      - name: Retrieve Go modules
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+      - name: Download golangci-lint bin
+        if: steps.cache-golangci-lint.outputs.cache-hit != 'true'
+        run: |
+          wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.38.0
+      - name: Run golangci-lint binary
+        run: |
+          ./bin/golangci-lint run --timeout=2m --issues-exit-code=0 --out-format checkstyle > lint-report.xml
+      - name: Upload lint report
+        uses: actions/upload-artifact@v2
+        with:
+          name: lint-report
+          path: lint-report.xml
+          retention-days: 1
+  semantic_release:
+    name: Generate Release
+    runs-on: ubuntu-22.04
+    needs:
+      - test
+      - lint
+    steps:
+      - name: Setup Node
+        uses: actions/setup-node@v2
+        with:
+          node-version: 14
+      - name: Check out code
+        uses: actions/checkout@v2
+      - name: Release new version
+        run: |
+          export SEMANTIC_RELEASE_PACKAGE=$(echo ${GITHUB_REPOSITORY} | cut -d '/' -f 2)
+          npm install semantic-release@17.0.4
+          npm install semantic-release-slack-bot@1.6.2
+          npx semantic-release

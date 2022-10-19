@@ -1,0 +1,84 @@
+linters-settings:
+  dupl:
+    threshold: 100
+  funlen:
+    lines: 100
+    statements: 50
+  goconst:
+    min-len: 2
+    min-occurrences: 2
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - dupImport
+      - ifElseChain
+      - octalLiteral
+      - wrapperFunc
+  gocyclo:
+    min-complexity: 15
+  goimports:
+    local-prefixes: github.com/jacklaaa89/amqp
+  golint:
+    min-confidence: 0.8
+  govet:
+    check-shadowing: true
+  lll:
+    line-length: 220
+  misspell:
+    locale: UK
+  godox:
+    keywords:
+      - FIXME
+      - BUG
+linters:
+  disable-all: true
+  enable:
+    - bodyclose
+    - deadcode
+    - dupl
+    - errcheck
+    - funlen
+    - goconst
+    - gocritic
+    - gocyclo
+    - goimports
+    - golint
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - scopelint
+    - staticcheck
+    - structcheck
+    - typecheck
+    - unparam
+    - unused
+    - varcheck
+    - whitespace
+    - godox
+run:
+  test: false
+  concurrency: 4
+  issues-exit-code: 1
+  skip-files:
+    - _test\.go
+  skip-dirs:
+    - test
+    - terraform
+    - scripts
+    - docker
+    - migrations
+issues:
+  include:
+    - EXC0002
+  exclude-rules:
+    - linters:
+        - misspell
+      text: "finalize` is a misspelling of `finalise"

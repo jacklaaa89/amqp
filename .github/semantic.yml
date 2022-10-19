@@ -1,0 +1,8 @@
+# Always validate the PR title, and ignore the commits
+titleOnly: true
+
+# See: https://github.com/commitizen/conventional-commit-types/blob/v3.0.0/index.json
+types:
+  - feat
+  - fix
+  - build
